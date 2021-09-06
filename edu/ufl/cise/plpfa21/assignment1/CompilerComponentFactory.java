@@ -13,10 +13,12 @@ public class CompilerComponentFactory{
 		int token_line;
 		int token_posInLine;
 		int num;
+		int flag;
 		String token_text;
 		Token next;
 		
 		public Token (Kind kind, int pos, int length, int line, int posInLine, String text){
+			flag = 0;
 			token_kind = kind;
 			token_pos = pos;
 			token_length = length;
@@ -67,14 +69,16 @@ public class CompilerComponentFactory{
 	static public class Lexer implements IPLPLexer {
 		Token head;
 		Token current;
-		public Lexer (Token t){
+		public Lexer (){
 			head = null;
+			current = null;
 		}
 		
 		public void add (Token t) {
 			Token newToken  = new Token(t.token_kind, t.token_pos, t.token_length, t.token_line, t.token_posInLine, t.token_text);
 			if(head == null) {
 				head = newToken;
+				current = head;
 				return;
 			}
 			else {
@@ -83,21 +87,15 @@ public class CompilerComponentFactory{
 					current = current.next;
 				}
 					
-				t.next = newToken;
+				current.next = newToken;
 			}
 			
 		}
 
 		@Override
-		public IPLPToken nextToken() throws LexicalException {
-			if(current == head) {
-				return head;
-			}
-			else {
-				current = current.next;
-				return current;
-			}
-			
+		public IPLPToken nextToken() {
+			current = current.next;
+			return current;
 		}
 	}
 		
@@ -111,15 +109,13 @@ public class CompilerComponentFactory{
 		int pos = 0;
 		int line = 0;
 		int posInLine = 0;
-		int nextTokenPos = 0;
-		int numTokens = 0;
 		String txt = ""; //temporary string to hold text of tokens
 		int numChars = input.length();
 		chars = Arrays.copyOf(input.toCharArray(), numChars + 1); 
 		chars[numChars] = EOFchar;
 		
-		result = new Lexer(new Token(Kind.INT_LITERAL, startPos, 1, line, startPosInLine, txt));
-		result.head = new Token(Kind.INT_LITERAL, startPos, 1, line, startPosInLine, txt);
+		result = new Lexer();
+		result.head = new Token(Kind.SEMI, 999, 999, 999, 999, "DUMMYHEAD");
 		enum State {START, HAVE_EQUAL, DIGITS, IDENT_PART}
 		
 		State state = State.START;
@@ -139,9 +135,101 @@ public class CompilerComponentFactory{
 							line++;
 							posInLine = 1;
 						}
+						case '('-> {
+							txt = "(";
+							result.add(new Token(Kind.LPAREN, startPos, 1, line, posInLine, txt));
+							result.nextToken();
+							pos++;
+							posInLine++;
+						}
+						case ')'-> {
+							txt = ")";
+							result.add(new Token(Kind.RPAREN, startPos, 1, line, posInLine, txt));
+							result.nextToken();
+							pos++;
+							posInLine++;
+						}
+						case '['-> {
+							txt = "[";
+							result.add(new Token(Kind.LSQUARE, startPos, 1, line, posInLine, txt));
+							result.nextToken();
+							pos++;
+							posInLine++;
+						}
+						case ']'-> {
+							txt = "]";
+							result.add(new Token(Kind.RSQUARE, startPos, 1, line, posInLine, txt));
+							result.nextToken();
+							pos++;
+							posInLine++;
+						}
+						case '+'-> {
+							txt = "+";
+							result.add(new Token(Kind.PLUS, startPos, 1, line, posInLine, txt));
+							result.nextToken();
+							pos++;
+							posInLine++;
+						}
+						case '-'-> {
+							txt = "-";
+							result.add(new Token(Kind.MINUS, startPos, 1, line, posInLine, txt));
+							result.nextToken();
+							pos++;
+							posInLine++;
+						}
+						case '/'-> {
+							txt = "/";
+							result.add(new Token(Kind.DIV, startPos, 1, line, posInLine, txt));
+							result.nextToken();
+							pos++;
+							posInLine++;
+						}
+						case '*'-> {
+							txt = "*";
+							result.add(new Token(Kind.TIMES, startPos, 1, line, posInLine, txt));
+							result.nextToken();
+							pos++;
+							posInLine++;
+						}
+						case '<'-> {
+							txt = "<";
+							result.add(new Token(Kind.LT, startPos, 1, line, posInLine, txt));
+							result.nextToken();
+							pos++;
+							posInLine++;
+						}
+						case '>'-> {
+							txt = ">";
+							result.add(new Token(Kind.GT, startPos, 1, line, posInLine, txt));
+							result.nextToken();
+							pos++;
+							posInLine++;
+						}
+						case ':'-> {
+							txt = ":";
+							result.add(new Token(Kind.COLON, startPos, 1, line, posInLine, txt));
+							result.nextToken();
+							pos++;
+							posInLine++;
+						}
+						case ';'-> {
+							txt = ";";
+							result.add(new Token(Kind.SEMI, startPos, 1, line, posInLine, txt));
+							result.nextToken();
+							pos++;
+							posInLine++;
+						}
+						case ','-> {
+							txt = ",";
+							result.add(new Token(Kind.COMMA, startPos, 1, line, posInLine, txt));
+							result.nextToken();
+							pos++;
+							posInLine++;
+						}
 						case '0'-> {
-							result.add(new Token(Kind.INT_LITERAL, startPos, 1, line, startPosInLine, txt));
-							result.current = result.current.next;
+							txt = "0";
+							result.add(new Token(Kind.INT_LITERAL, startPos, 1, line, posInLine, txt));
+							result.nextToken();
 							pos++;
 							posInLine++;
 						}
@@ -151,6 +239,7 @@ public class CompilerComponentFactory{
 							state = State.HAVE_EQUAL;
 						}
 						case'1', '2', '3', '4', '5', '6', '7', '8', '9' -> {
+							txt = "";
 							pos++;
 							posInLine++;
 							state = State.DIGITS;
@@ -177,12 +266,13 @@ public class CompilerComponentFactory{
 				case DIGITS-> {
 					switch (ch) {
 						case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' -> {
+							txt = txt + ch;
 							pos++;
 							posInLine++;
 						}
 						default -> {
 							result.add(new Token(Kind.INT_LITERAL, startPos, pos - startPos, line, startPosInLine, txt));
-							result.current = result.current.next;
+							result.nextToken();
 							state = State.START; 
 							//DO NOT INCREMENT pos  
 							
@@ -199,6 +289,7 @@ public class CompilerComponentFactory{
 		//add EOF token
 		result.add(new Token(Kind.EOF, pos, 0, line, posInLine, ""));
 		result.current = result.head;
+		
 		
 		return result;
 
