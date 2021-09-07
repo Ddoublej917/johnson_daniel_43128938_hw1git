@@ -1,6 +1,5 @@
 package edu.ufl.cise.plpfa21.assignment1;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 
 import edu.ufl.cise.plpfa21.assignment1.PLPTokenKinds.Kind;
@@ -69,9 +68,15 @@ public class CompilerComponentFactory{
 	static public class Lexer implements IPLPLexer {
 		Token head;
 		Token current;
+		String errorMessage;
+		int errorLine;
+		int errorPosInLine;
 		public Lexer (){
 			head = null;
 			current = null;
+			errorMessage = "";
+			errorLine = 0;
+			errorPosInLine = 0;
 		}
 		
 		public void add (Token t) {
@@ -93,8 +98,14 @@ public class CompilerComponentFactory{
 		}
 
 		@Override
-		public IPLPToken nextToken() {
-			current = current.next;
+		public IPLPToken nextToken() throws LexicalException {
+			if (!errorMessage.equals("")) {
+				throw new LexicalException(errorMessage, errorLine,errorPosInLine);
+			}
+			else {
+				current = current.next;
+			}
+			errorMessage = "";
 			return current;
 		}
 	}
@@ -106,9 +117,9 @@ public class CompilerComponentFactory{
 		char EOFchar = 0;
 		int startPos = 0;
 		int startPosInLine = 0;
-		int pos = 0;
-		int line = 0;
-		int posInLine = 0;
+		int pos = 0; // position in char array. Starts at zero
+		int line = 1; // line number of token in source. Starts at 1
+		int posInLine = 1; // position in line of source. Starts at 1
 		String txt = ""; //temporary string to hold text of tokens
 		int numChars = input.length();
 		chars = Arrays.copyOf(input.toCharArray(), numChars + 1); 
@@ -138,105 +149,122 @@ public class CompilerComponentFactory{
 						case '('-> {
 							txt = "(";
 							result.add(new Token(Kind.LPAREN, startPos, 1, line, posInLine, txt));
-							result.nextToken();
+							result.current = result.current.next;
 							pos++;
 							posInLine++;
 						}
 						case ')'-> {
 							txt = ")";
 							result.add(new Token(Kind.RPAREN, startPos, 1, line, posInLine, txt));
-							result.nextToken();
+							result.current = result.current.next;
 							pos++;
 							posInLine++;
 						}
 						case '['-> {
 							txt = "[";
 							result.add(new Token(Kind.LSQUARE, startPos, 1, line, posInLine, txt));
-							result.nextToken();
+							result.current = result.current.next;
 							pos++;
 							posInLine++;
 						}
 						case ']'-> {
 							txt = "]";
 							result.add(new Token(Kind.RSQUARE, startPos, 1, line, posInLine, txt));
-							result.nextToken();
+							result.current = result.current.next;
 							pos++;
 							posInLine++;
 						}
 						case '+'-> {
 							txt = "+";
 							result.add(new Token(Kind.PLUS, startPos, 1, line, posInLine, txt));
-							result.nextToken();
+							result.current = result.current.next;
 							pos++;
 							posInLine++;
 						}
 						case '-'-> {
 							txt = "-";
 							result.add(new Token(Kind.MINUS, startPos, 1, line, posInLine, txt));
-							result.nextToken();
+							result.current = result.current.next;
 							pos++;
 							posInLine++;
 						}
 						case '/'-> {
 							txt = "/";
 							result.add(new Token(Kind.DIV, startPos, 1, line, posInLine, txt));
-							result.nextToken();
+							result.current = result.current.next;
 							pos++;
 							posInLine++;
 						}
 						case '*'-> {
 							txt = "*";
 							result.add(new Token(Kind.TIMES, startPos, 1, line, posInLine, txt));
-							result.nextToken();
+							result.current = result.current.next;
 							pos++;
 							posInLine++;
 						}
 						case '<'-> {
 							txt = "<";
 							result.add(new Token(Kind.LT, startPos, 1, line, posInLine, txt));
-							result.nextToken();
+							result.current = result.current.next;
 							pos++;
 							posInLine++;
 						}
 						case '>'-> {
 							txt = ">";
 							result.add(new Token(Kind.GT, startPos, 1, line, posInLine, txt));
-							result.nextToken();
+							result.current = result.current.next;
 							pos++;
 							posInLine++;
 						}
 						case ':'-> {
 							txt = ":";
 							result.add(new Token(Kind.COLON, startPos, 1, line, posInLine, txt));
-							result.nextToken();
+							result.current = result.current.next;
 							pos++;
 							posInLine++;
 						}
 						case ';'-> {
 							txt = ";";
 							result.add(new Token(Kind.SEMI, startPos, 1, line, posInLine, txt));
-							result.nextToken();
+							result.current = result.current.next;
 							pos++;
 							posInLine++;
 						}
 						case ','-> {
 							txt = ",";
 							result.add(new Token(Kind.COMMA, startPos, 1, line, posInLine, txt));
-							result.nextToken();
+							result.current = result.current.next;
 							pos++;
 							posInLine++;
 						}
 						case '0'-> {
 							txt = "0";
 							result.add(new Token(Kind.INT_LITERAL, startPos, 1, line, posInLine, txt));
-							result.nextToken();
+							result.current = result.current.next;
 							pos++;
 							posInLine++;
 						}
 						case'=' -> {
+							txt = "=";
 							pos++;  
 							posInLine++;  
 							state = State.HAVE_EQUAL;
+						}
+						case'!' -> {
+							if(chars[pos+1] == '=') {
+								txt = "!";
+								pos++;  
+								posInLine++;  
+								state = State.HAVE_EQUAL;
+							}
+							
+							else {
+								txt = "!";
+								result.add(new Token(Kind.BANG, startPos, 1, line, posInLine, txt));
+								result.current = result.current.next;
+								pos++;
+								posInLine++;
+							}
 						}
 						case'1', '2', '3', '4', '5', '6', '7', '8', '9' -> {
 							txt = "";
@@ -253,7 +281,13 @@ public class CompilerComponentFactory{
 							}
 							else {
 								if(ch != EOFchar) {
-									//Handle error
+									result.errorMessage  = ch + " is an unrecognized character for this langauge";
+									try {
+										result.nextToken();
+									} catch (LexicalException e) {
+										state = State.START; 
+										e.printStackTrace();
+									}
 								}
 								pos++;
 							}
@@ -261,8 +295,39 @@ public class CompilerComponentFactory{
 					}	
 				}
 				case HAVE_EQUAL-> {
-					
+					int equalsPos = pos;
+					switch (ch) {
+						case '=' -> {
+							if(txt == "!") {
+								txt = "!=";
+								result.add(new Token(Kind.NOT_EQUALS, equalsPos, 2, line, posInLine, txt));
+								result.current = result.current.next;
+								pos++;
+								posInLine++;
+								state = State.START;
+							}
+							else if(txt == "=") {
+								txt = "==";
+								result.add(new Token(Kind.EQUALS, equalsPos, 2, line, posInLine, txt));
+								result.current = result.current.next;
+								pos++;
+								posInLine++;
+								state = State.START;
+							}
+						}
+						default -> {
+							result.errorMessage  = "Lexical error involving an equals sign";
+							try {
+								result.nextToken();
+							} catch (LexicalException e) {
+								state = State.START; 
+								e.printStackTrace();
+							}
+							
+						}
+					}
 				}
+
 				case DIGITS-> {
 					switch (ch) {
 						case '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' -> {
@@ -272,7 +337,7 @@ public class CompilerComponentFactory{
 						}
 						default -> {
 							result.add(new Token(Kind.INT_LITERAL, startPos, pos - startPos, line, startPosInLine, txt));
-							result.nextToken();
+							result.current = result.current.next;
 							state = State.START; 
 							//DO NOT INCREMENT pos  
 							
