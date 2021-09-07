@@ -14,6 +14,7 @@ public class CompilerComponentFactory{
 		int num;
 		int flag;
 		String token_text;
+		String errorMessage;
 		Token next;
 		
 		public Token (Kind kind, int pos, int length, int line, int posInLine, String text){
@@ -24,6 +25,7 @@ public class CompilerComponentFactory{
 			token_line = line;
 			token_posInLine = posInLine;
 			token_text = text;
+			errorMessage = "";
 			next = null;
 		}
 		
@@ -68,15 +70,9 @@ public class CompilerComponentFactory{
 	static public class Lexer implements IPLPLexer {
 		Token head;
 		Token current;
-		String errorMessage;
-		int errorLine;
-		int errorPosInLine;
 		public Lexer (){
 			head = null;
 			current = null;
-			errorMessage = "";
-			errorLine = 0;
-			errorPosInLine = 0;
 		}
 		
 		public void add (Token t) {
@@ -99,13 +95,12 @@ public class CompilerComponentFactory{
 
 		@Override
 		public IPLPToken nextToken() throws LexicalException {
-			if (!errorMessage.equals("")) {
-				throw new LexicalException(errorMessage, errorLine,errorPosInLine);
+			if (current.next.token_kind == Kind.ERROR) {
+				throw new LexicalException(current.errorMessage, current.token_line,current.token_posInLine);
 			}
 			else {
 				current = current.next;
 			}
-			errorMessage = "";
 			return current;
 		}
 	}
@@ -119,7 +114,7 @@ public class CompilerComponentFactory{
 		int startPosInLine = 0;
 		int pos = 0; // position in char array. Starts at zero
 		int line = 1; // line number of token in source. Starts at 1
-		int posInLine = 1; // position in line of source. Starts at 1
+		int posInLine = 0; // position in line of source. Starts at 1
 		String txt = ""; //temporary string to hold text of tokens
 		int numChars = input.length();
 		chars = Arrays.copyOf(input.toCharArray(), numChars + 1); 
@@ -136,6 +131,7 @@ public class CompilerComponentFactory{
 			switch (state) {
 				case START-> {
 					startPos = pos;
+					startPosInLine = posInLine;
 					switch (ch) {
 						case ' ', '\t'-> {
 							pos++;
@@ -144,7 +140,7 @@ public class CompilerComponentFactory{
 						case '\n'-> {
 							pos++;
 							line++;
-							posInLine = 1;
+							posInLine = 0;
 						}
 						case '('-> {
 							txt = "(";
@@ -267,13 +263,14 @@ public class CompilerComponentFactory{
 							}
 						}
 						case'1', '2', '3', '4', '5', '6', '7', '8', '9' -> {
-							txt = "";
+							txt = "" + ch;
 							pos++;
 							posInLine++;
 							state = State.DIGITS;
 						}
 						default -> {
 							if (Character.isJavaIdentifierStart(ch)) {
+								txt = txt + ch;
 								pos++;
 								posInLine++;
 								state = State.IDENT_PART;
@@ -281,13 +278,10 @@ public class CompilerComponentFactory{
 							}
 							else {
 								if(ch != EOFchar) {
-									result.errorMessage  = ch + " is an unrecognized character for this langauge";
-									try {
-										result.nextToken();
-									} catch (LexicalException e) {
-										state = State.START; 
-										e.printStackTrace();
-									}
+									txt = "" + ch;
+									result.add(new Token(Kind.ERROR, startPos, 1, line, posInLine, txt));
+									result.current = result.current.next;
+									result.current.errorMessage = ch + " is an unrecognized character for this langauge";
 								}
 								pos++;
 							}
@@ -298,31 +292,33 @@ public class CompilerComponentFactory{
 					int equalsPos = pos;
 					switch (ch) {
 						case '=' -> {
-							if(txt == "!") {
+							if(txt.equals("!")) {
 								txt = "!=";
-								result.add(new Token(Kind.NOT_EQUALS, equalsPos, 2, line, posInLine, txt));
+								result.add(new Token(Kind.NOT_EQUALS, equalsPos, 2, line, startPosInLine, txt));
 								result.current = result.current.next;
 								pos++;
 								posInLine++;
+								txt = "";
 								state = State.START;
 							}
-							else if(txt == "=") {
+							else if(txt.equals("=")) {
 								txt = "==";
-								result.add(new Token(Kind.EQUALS, equalsPos, 2, line, posInLine, txt));
+								result.add(new Token(Kind.EQUALS, equalsPos, 2, line, startPosInLine, txt));
 								result.current = result.current.next;
 								pos++;
 								posInLine++;
+								txt = "";
 								state = State.START;
 							}
 						}
 						default -> {
-							result.errorMessage  = "Lexical error involving an equals sign";
-							try {
-								result.nextToken();
-							} catch (LexicalException e) {
-								state = State.START; 
-								e.printStackTrace();
-							}
+							txt = "=";
+							result.add(new Token(Kind.ASSIGN, equalsPos, 1, line, startPosInLine, txt));
+							result.current = result.current.next;
+							pos++;
+							posInLine++;
+							txt = "";
+							state = State.START;
 							
 						}
 					}
@@ -336,17 +332,41 @@ public class CompilerComponentFactory{
 							posInLine++;
 						}
 						default -> {
-							result.add(new Token(Kind.INT_LITERAL, startPos, pos - startPos, line, startPosInLine, txt));
-							result.current = result.current.next;
-							state = State.START; 
-							//DO NOT INCREMENT pos  
-							
+							try {
+							    int i = Integer.parseInt(txt);
+							    result.add(new Token(Kind.INT_LITERAL, startPos, pos - startPos, line, startPosInLine, txt));
+								result.current = result.current.next;
+								txt = "";
+								state = State.START; 
+							}
+							catch (NumberFormatException e) {
+								result.add(new Token(Kind.ERROR, startPos, pos - startPos, line, startPosInLine, txt));
+								txt = "";
+								result.current = result.current.next;
+								result.current.errorMessage = ch + " is an unrecognized character for this langauge";
+								state = State.START;
+							}
+							 		
 						}
 					}
 				}
 					
 				case IDENT_PART-> {
-					
+					switch (ch) {
+					case 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '$', '_' -> {
+						txt = txt + ch;
+						pos++;
+						posInLine++;
+					}
+					default -> {
+						result.add(new Token(Kind.IDENTIFIER, startPos, pos - startPos, line, startPosInLine, txt));
+						result.current = result.current.next;
+						txt = "";
+						state = State.START; 
+						//DO NOT INCREMENT pos  
+						
+					}
+				}
 				}
 			}
 		}
