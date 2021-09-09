@@ -122,7 +122,7 @@ public class CompilerComponentFactory{
 		
 		result = new Lexer();
 		result.head = new Token(Kind.SEMI, 999, 999, 999, 999, "DUMMYHEAD");
-		enum State {START, HAVE_EQUAL, DIGITS, IDENT_PART}
+		enum State {START, HAVE_EQUAL, DIGITS, IDENT_PART, AND, OR, STRING_LITERAL}
 		
 		State state = State.START;
 		
@@ -140,6 +140,10 @@ public class CompilerComponentFactory{
 						case '\n'-> {
 							pos++;
 							line++;
+							posInLine = 0;
+						}
+						case '\r'-> {
+							pos++;
 							posInLine = 0;
 						}
 						case '('-> {
@@ -233,6 +237,18 @@ public class CompilerComponentFactory{
 							pos++;
 							posInLine++;
 						}
+						case '&'-> {
+							txt = "&";
+							pos++;
+							posInLine++;
+							state = State.AND;
+						}
+						case '|'-> {
+							txt = "|";
+							pos++;
+							posInLine++;
+							state = State.OR;
+						}
 						case '0'-> {
 							txt = "0";
 							result.add(new Token(Kind.INT_LITERAL, startPos, 1, line, posInLine, txt));
@@ -261,6 +277,18 @@ public class CompilerComponentFactory{
 								pos++;
 								posInLine++;
 							}
+						}
+						case '\"' -> {
+							txt = txt + ch;
+							pos++;
+							posInLine++;
+							state = State.STRING_LITERAL;
+						}
+						case '\'' -> {
+							txt = txt + ch;
+							pos++;
+							posInLine++;
+							state = State.STRING_LITERAL;
 						}
 						case'1', '2', '3', '4', '5', '6', '7', '8', '9' -> {
 							txt = "" + ch;
@@ -322,6 +350,123 @@ public class CompilerComponentFactory{
 							
 						}
 					}
+					
+					
+				}
+				
+				case STRING_LITERAL->{
+					switch (ch) {
+						case '\\' -> {
+							if (chars[pos+1] == 'b' || chars[pos+1] == 't' || chars[pos+1] == 'n' || chars[pos+1] == 'r' || chars[pos+1] == 'f' || chars[pos+1] == '\'' || chars[pos+1] == '\\') {
+								txt = txt + ch + chars[pos+1];
+								pos+=2;
+								posInLine+=2;
+							}
+							else {
+								txt = "" + ch;
+								result.add(new Token(Kind.ERROR, startPos, pos - startPos, line, posInLine, txt));
+								result.current = result.current.next;
+								result.current.errorMessage = "Invalid string literal including a \\";
+								txt = "";
+								state = State.START;
+							}
+							
+						}
+						case '\'' -> {
+							txt = txt + ch;
+							if(txt.equals("\'\'")) {
+								txt = "" + ch;
+								result.add(new Token(Kind.ERROR, startPos, pos - startPos, line, posInLine, txt));
+								result.current = result.current.next;
+								result.current.errorMessage = "Empty string literal (\'\')";
+								txt = "";
+								state = State.START;
+							}
+							else {
+								txt = txt + ch;
+								result.add(new Token(Kind.STRING_LITERAL, startPos, pos - startPos, line, posInLine, txt));
+								result.current = result.current.next;
+								txt = "";
+								pos++;
+								posInLine++;
+								state = State.START;
+							}
+						}
+						case '\"' -> {
+							txt = txt + ch;
+							if(txt.equals("\"\"")) {
+								txt = "" + ch;
+								result.add(new Token(Kind.ERROR, startPos, pos - startPos, line, posInLine, txt));
+								result.current = result.current.next;
+								result.current.errorMessage = "Empty string literal (\'\')";
+								txt = "";
+								state = State.START;
+							}
+							else {
+								txt = txt + ch;
+								result.add(new Token(Kind.STRING_LITERAL, startPos, pos - startPos, line, posInLine, txt));
+								result.current = result.current.next;
+								pos++;
+								posInLine++;
+								txt = "";
+								state = State.START;
+							}
+							
+						}
+						default -> {
+							txt = txt + ch;
+							pos++;
+							posInLine++;
+						}
+					}
+				}
+				
+				case AND-> {
+					int andPos = pos;
+					switch (ch) {
+						case '&' -> {
+							txt = "&&";
+							result.add(new Token(Kind.AND, andPos, 2, line, startPosInLine, txt));
+							result.current = result.current.next;
+							pos++;
+							posInLine++;
+							txt = "";
+							state = State.START;
+						}
+						default -> {
+							txt = "" + ch;
+							result.add(new Token(Kind.ERROR, andPos, 1, line, posInLine, txt));
+							result.current = result.current.next;
+							result.current.errorMessage = ch + " is an unrecognized character for this langauge";
+							txt = "";
+							state = State.START;
+							
+						}
+					}
+				}
+				
+				case OR-> {
+					int orPos = pos;
+					switch (ch) {
+						case '|' -> {
+							txt = "||";
+							result.add(new Token(Kind.OR, orPos, 2, line, startPosInLine, txt));
+							result.current = result.current.next;
+							pos++;
+							posInLine++;
+							txt = "";
+							state = State.START;
+						}
+						default -> {
+							txt = "" + ch;
+							result.add(new Token(Kind.ERROR, orPos, 1, line, posInLine, txt));
+							result.current = result.current.next;
+							result.current.errorMessage = ch + " is an unrecognized character for this langauge";
+							txt = "";
+							state = State.START;
+							
+						}
+					}
 				}
 
 				case DIGITS-> {
@@ -333,7 +478,7 @@ public class CompilerComponentFactory{
 						}
 						default -> {
 							try {
-							    int i = Integer.parseInt(txt);
+							    Integer.parseInt(txt);
 							    result.add(new Token(Kind.INT_LITERAL, startPos, pos - startPos, line, startPosInLine, txt));
 								result.current = result.current.next;
 								txt = "";
@@ -355,9 +500,126 @@ public class CompilerComponentFactory{
 					switch (ch) {
 					case 'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 's', 't', 'u', 'v', 'w', 'x', 'y', 'z', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '$', '_' -> {
 						txt = txt + ch;
+						if(txt.equals("VAR")) {
+							result.add(new Token(Kind.KW_VAR, startPos, pos - startPos, line, startPosInLine, txt));
+							result.current = result.current.next;
+							txt = "";
+							state = State.START; 
+						}
+						else if(txt.equals("VAL")) {
+							result.add(new Token(Kind.KW_VAL, startPos, pos - startPos, line, startPosInLine, txt));
+							result.current = result.current.next;
+							txt = "";
+							state = State.START; 
+						}
+						else if(txt.equals("FUN")) {
+							result.add(new Token(Kind.KW_FUN, startPos, pos - startPos, line, startPosInLine, txt));
+							result.current = result.current.next;
+							txt = "";
+							state = State.START; 
+						}
+						else if(txt.equals("DO")) {
+							result.add(new Token(Kind.KW_DO, startPos, pos - startPos, line, startPosInLine, txt));
+							result.current = result.current.next;
+							txt = "";
+							state = State.START; 
+						}
+						else if(txt.equals("END")) {
+							result.add(new Token(Kind.KW_END, startPos, pos - startPos, line, startPosInLine, txt));
+							result.current = result.current.next;
+							txt = "";
+							state = State.START; 
+						}
+						else if(txt.equals("LET")) {
+							result.add(new Token(Kind.KW_LET, startPos, pos - startPos, line, startPosInLine, txt));
+							result.current = result.current.next;
+							txt = "";
+							state = State.START; 
+						}
+						else if(txt.equals("SWITCH")) {
+							result.add(new Token(Kind.KW_SWITCH, startPos, pos - startPos, line, startPosInLine, txt));
+							result.current = result.current.next;
+							txt = "";
+							state = State.START; 
+						}
+						else if(txt.equals("CASE")) {
+							result.add(new Token(Kind.KW_CASE, startPos, pos - startPos, line, startPosInLine, txt));
+							result.current = result.current.next;
+							txt = "";
+							state = State.START; 
+						}
+						else if(txt.equals("DEFAULT")) {
+							result.add(new Token(Kind.KW_DEFAULT, startPos, pos - startPos, line, startPosInLine, txt));
+							result.current = result.current.next;
+							txt = "";
+							state = State.START; 
+						}
+						else if(txt.equals("IF")) {
+							result.add(new Token(Kind.KW_IF, startPos, pos - startPos, line, startPosInLine, txt));
+							result.current = result.current.next;
+							txt = "";
+							state = State.START; 
+						}
+						else if(txt.equals("WHILE")) {
+							result.add(new Token(Kind.KW_WHILE, startPos, pos - startPos, line, startPosInLine, txt));
+							result.current = result.current.next;
+							txt = "";
+							state = State.START; 
+						}
+						else if(txt.equals("RETURN")) {
+							result.add(new Token(Kind.KW_RETURN, startPos, pos - startPos, line, startPosInLine, txt));
+							result.current = result.current.next;
+							txt = "";
+							state = State.START; 
+						}
+						else if(txt.equals("NIL")) {
+							result.add(new Token(Kind.KW_NIL, startPos, pos - startPos, line, startPosInLine, txt));
+							result.current = result.current.next;
+							txt = "";
+							state = State.START; 
+						}
+						else if(txt.equals("TRUE")) {
+							result.add(new Token(Kind.KW_TRUE, startPos, pos - startPos, line, startPosInLine, txt));
+							result.current = result.current.next;
+							txt = "";
+							state = State.START; 
+						}
+						else if(txt.equals("FALSE")) {
+							result.add(new Token(Kind.KW_FALSE, startPos, pos - startPos, line, startPosInLine, txt));
+							result.current = result.current.next;
+							txt = "";
+							state = State.START; 
+						}
+						else if(txt.equals("INT")) {
+							result.add(new Token(Kind.KW_INT, startPos, pos - startPos, line, startPosInLine, txt));
+							result.current = result.current.next;
+							txt = "";
+							state = State.START; 
+						}
+						else if(txt.equals("STRING")) {
+							result.add(new Token(Kind.KW_STRING, startPos, pos - startPos, line, startPosInLine, txt));
+							result.current = result.current.next;
+							txt = "";
+							state = State.START; 
+						}
+						else if(txt.equals("BOOLEAN")) {
+							result.add(new Token(Kind.KW_BOOLEAN, startPos, pos - startPos, line, startPosInLine, txt));
+							result.current = result.current.next;
+							txt = "";
+							state = State.START; 
+						}
+						else if(txt.equals("LIST")) {
+							result.add(new Token(Kind.KW_LIST, startPos, pos - startPos, line, startPosInLine, txt));
+							result.current = result.current.next;
+							txt = "";
+							state = State.START; 
+						}
+
 						pos++;
 						posInLine++;
+
 					}
+					
 					default -> {
 						result.add(new Token(Kind.IDENTIFIER, startPos, pos - startPos, line, startPosInLine, txt));
 						result.current = result.current.next;
